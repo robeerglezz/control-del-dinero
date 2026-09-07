@@ -44,3 +44,4 @@ Añade esa URL también en Supabase > Authentication > URL Configuration.
 La web usa Supabase Auth y Row Level Security (RLS). Cada consulta se ejecuta con la sesión del usuario y las políticas solo permiten acceder a filas cuyo `user_id` coincide con `auth.uid()`.
 
 No pongas nunca una `service_role` key en GitHub Pages.
+

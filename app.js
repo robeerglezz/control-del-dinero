@@ -113,6 +113,16 @@ $("authForm").addEventListener("submit",async e=>{
   }
 }
 });
+async function oauth(provider){
+  setAuthMessage("");
+  const {error}=await db.auth.signInWithOAuth({
+    provider,
+    options:{redirectTo:window.location.origin+window.location.pathname}
+  });
+  if(error)setAuthMessage(error.message);
+}
+$("googleBtn").addEventListener("click",()=>oauth("google"));
+
 $("resetPassword").addEventListener("click",async()=>{
   const email=$("email").value.trim();if(!email)return setAuthMessage("Escribe primero tu email.");
   const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
