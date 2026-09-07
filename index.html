@@ -91,18 +91,22 @@
     <div class="modal-backdrop" id="modalBackdrop"></div>
     <div class="modal-sheet wizard-sheet">
       <div class="modal-header"><h3 id="modalTitle">Nuevo movimiento</h3><button id="closeModal" class="icon-button" type="button">×</button></div>
-      <div class="wizard-progress"><span id="stepLabel">Paso 1 de 5</span><div class="progress-track"><i id="progressBar"></i></div></div>
+      <div class="wizard-progress"><div id="wizardProgressBar"></div></div>
+      <div class="wizard-step-label" id="wizardStepLabel">Paso 1 de 5</div>
       <form id="movementForm">
         <input type="hidden" id="movementId">
-        <div class="wizard-step" data-step="1">
-          <div class="step-kicker">TIPO</div><div class="type-toggle"><button type="button" data-type="expense" class="type-btn active expense-type">Gasto</button><button type="button" data-type="income" class="type-btn income-type">Ingreso</button></div>
-          <div class="step-kicker">PASO 1</div><h4>¿Cuánto?</h4><label class="big-field">Cantidad (€)<input id="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="0,00"></label>
+        <div id="wizardSteps">
+          <section class="wizard-step active" data-step="1">
+            <h4>¿Cuánto?</h4><p>Indica la cantidad del movimiento.</p>
+            <div class="type-toggle"><button type="button" data-type="expense" class="type-btn active expense-type">Gasto</button><button type="button" data-type="income" class="type-btn income-type">Ingreso</button></div>
+            <label class="big-field">Cantidad (€)<input id="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="0,00"></label>
+          </section>
+          <section class="wizard-step" data-step="2"><h4>¿En qué?</h4><p>Escribe un concepto para recordar el movimiento.</p><label class="big-field">Concepto<input id="description" type="text" maxlength="120" required placeholder="Ej. Supermercado"></label></section>
+          <section class="wizard-step" data-step="3"><h4>¿Qué categoría?</h4><p>Selecciona la categoría que mejor encaje.</p><label class="big-field">Categoría<select id="category" required></select></label></section>
+          <section class="wizard-step" data-step="4"><h4>¿Cuándo?</h4><p>Selecciona la fecha del movimiento.</p><label class="big-field">Fecha<input id="date" type="date" required></label></section>
+          <section class="wizard-step" data-step="5"><h4>¿Cómo se pagó?</h4><p>Elige el método utilizado.</p><label class="big-field">Método<select id="paymentMethod"><option>Tarjeta</option><option>Efectivo</option><option>Transferencia</option><option>Bizum</option><option>Otro</option></select></label><div class="wizard-summary" id="wizardSummary"></div></section>
         </div>
-        <div class="wizard-step hidden" data-step="2"><div class="step-kicker">PASO 2</div><h4>¿En qué?</h4><label class="big-field">Concepto<input id="description" type="text" maxlength="120" required placeholder="Ej. Supermercado"></label></div>
-        <div class="wizard-step hidden" data-step="3"><div class="step-kicker">PASO 3</div><h4>¿Qué categoría?</h4><label class="big-field">Categoría<select id="category" required></select></label></div>
-        <div class="wizard-step hidden" data-step="4"><div class="step-kicker">PASO 4</div><h4>¿Qué fecha?</h4><label class="big-field">Fecha<input id="date" type="date" required></label></div>
-        <div class="wizard-step hidden" data-step="5"><div class="step-kicker">PASO 5</div><h4>¿Cómo lo pagaste?</h4><label class="big-field">Método<select id="paymentMethod"><option>Tarjeta</option><option>Efectivo</option><option>Transferencia</option><option>Bizum</option><option>Otro</option></select></label><div class="wizard-summary" id="wizardSummary"></div></div>
-        <div class="wizard-actions"><button id="backStep" class="secondary" type="button">Atrás</button><button id="nextStep" class="primary" type="button">Continuar</button><button id="saveStep" class="primary hidden" type="submit">Guardar movimiento</button></div>
+        <div class="wizard-actions"><button id="wizardBack" class="secondary full" type="button">Atrás</button><button id="wizardNext" class="primary full" type="button">Continuar</button><button id="wizardSave" class="primary full hidden" type="submit">Guardar movimiento</button></div>
         <button id="deleteBtn" class="danger full hidden" type="button">Eliminar movimiento</button>
       </form>
     </div>
