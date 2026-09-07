@@ -1,0 +1,125 @@
+const { createClient } = window.supabase;
+const supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+const $ = id => document.getElementById(id);
+const categories = {
+  expense: ["Alimentación","Transporte","Casa","Ocio","Compras","Suscripciones","Salud","Estudios","Otros"],
+  income: ["Sueldo","Freelance","Ventas","Regalo","Inversión","Otros"]
+};
+let session = null, movements = [], currentType = "expense", authMode = "login";
+
+const euro = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(n)||0);
+const dateES = d => new Intl.DateTimeFormat("es-ES",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(d+"T12:00:00"));
+const today = () => new Date().toISOString().slice(0,10);
+
+function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2200)}
+function setAuthMessage(msg=""){ $("authMessage").textContent=msg }
+
+function updateCategoryOptions(type, selected=""){
+  $("category").innerHTML = categories[type].map(c=>`<option ${c===selected?"selected":""}>${c}</option>`).join("");
+}
+function updateCategoryFilter(){
+  const all=[...new Set(movements.map(m=>m.category).filter(Boolean))].sort();
+  $("categoryFilter").innerHTML='<option value="all">Todas las categorías</option>'+all.map(c=>`<option>${c}</option>`).join("");
+}
+
+async function init(){
+  const {data:{session:s}}=await supabase.auth.getSession();
+  session=s; renderAuth();
+  supabase.auth.onAuthStateChange((_e,s2)=>{session=s2;renderAuth();if(s2) loadMovements()});
+}
+function renderAuth(){
+  if(session){$("authView").classList.add("hidden");$("appView").classList.remove("hidden");$("greeting").textContent="Hola 👋";loadMovements();}
+  else {$("authView").classList.remove("hidden");$("appView").classList.add("hidden")}
+}
+
+async function loadMovements(){
+  if(!session)return;
+  const {data,error}=await supabase.from("movements").select("*").order("date",{ascending:false}).order("created_at",{ascending:false});
+  if(error){toast("No se pudieron cargar los movimientos");console.error(error);return}
+  movements=data||[]; updateCategoryFilter(); render();
+}
+
+function filtered(){
+  const t=$("typeFilter").value,c=$("categoryFilter").value,q=$("searchFilter").value.trim().toLowerCase();
+  return movements.filter(m=>(t==="all"||m.type===t)&&(c==="all"||m.category===c)&&(!q||m.description.toLowerCase().includes(q)||m.category.toLowerCase().includes(q)));
+}
+function render(){
+  const allBalance=movements.reduce((s,m)=>s+(m.type==="income"?Number(m.amount):-Number(m.amount)),0);
+  const month=new Date().toISOString().slice(0,7);
+  const mm=movements.filter(m=>m.date.startsWith(month));
+  const monthBalance=mm.reduce((s,m)=>s+(m.type==="income"?Number(m.amount):-Number(m.amount)),0);
+  const income=movements.filter(m=>m.type==="income").reduce((s,m)=>s+Number(m.amount),0);
+  const expense=movements.filter(m=>m.type==="expense").reduce((s,m)=>s+Number(m.amount),0);
+  $("balance").textContent=euro(allBalance);$("monthBalance").textContent=euro(monthBalance);
+  $("incomeTotal").textContent=euro(income);$("expenseTotal").textContent=euro(expense);
+  const list=filtered();$("movementCount").textContent=`${list.length} movimiento${list.length===1?"":"s"}`;
+  $("movements").innerHTML=list.map(m=>`<article class="movement" data-id="${m.id}">
+    <div class="movement-icon">${m.type==="income"?"↗":"↘"}</div>
+    <div class="movement-main"><div class="movement-title">${escapeHtml(m.description)}</div><div class="movement-sub">${escapeHtml(m.category)} · ${dateES(m.date)} · ${escapeHtml(m.payment_method||"")}</div></div>
+    <div class="movement-amount ${m.type}">${m.type==="income"?"+":"−"} ${euro(m.amount)}</div>
+  </article>`).join("");
+  $("emptyState").classList.toggle("hidden",list.length>0);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+
+function openModal(m=null){
+  $("modal").classList.remove("hidden");
+  $("movementId").value=m?.id||"";$("modalTitle").textContent=m?"Editar movimiento":"Nuevo movimiento";
+  currentType=m?.type||"expense";
+  document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===currentType));
+  updateCategoryOptions(currentType,m?.category||categories[currentType][0]);
+  $("amount").value=m?.amount??"";$("description").value=m?.description??"";$("date").value=m?.date||today();$("paymentMethod").value=m?.payment_method||"Tarjeta";
+  $("deleteBtn").classList.toggle("hidden",!m);
+  setTimeout(()=>$("amount").focus(),100);
+}
+function closeModal(){$("modal").classList.add("hidden")}
+
+$("authForm").addEventListener("submit",async e=>{
+  e.preventDefault();setAuthMessage("");const email=$("email").value.trim(),password=$("password").value;
+  $("authSubmit").disabled=true;
+  let result;
+  if(authMode==="login") result=await supabase.auth.signInWithPassword({email,password});
+  else result=await supabase.auth.signUp({email,password});
+  $("authSubmit").disabled=false;
+  if(result.error)setAuthMessage(result.error.message);
+  else if(authMode==="signup")setAuthMessage("Cuenta creada. Revisa tu email si la confirmación está activada.");
+});
+$("toggleAuth").addEventListener("click",()=>{
+  authMode=authMode==="login"?"signup":"login";
+  $("authTitle").textContent=authMode==="login"?"Tu dinero, bajo control.":"Crea tu cuenta.";
+  $("authSubtitle").textContent=authMode==="login"?"Inicia sesión para ver tus ingresos y gastos.":"Tus movimientos estarán vinculados a tu cuenta.";
+  $("authSubmit").textContent=authMode==="login"?"Iniciar sesión":"Crear cuenta";
+  $("toggleAuth").textContent=authMode==="login"?"¿No tienes cuenta? Crear una":"¿Ya tienes cuenta? Iniciar sesión";
+  setAuthMessage("");
+});
+$("resetPassword").addEventListener("click",async()=>{
+  const email=$("email").value.trim();if(!email)return setAuthMessage("Escribe primero tu email.");
+  const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  setAuthMessage(error?error.message:"Te hemos enviado un enlace para restablecer la contraseña.");
+});
+$("logoutBtn").addEventListener("click",()=>supabase.auth.signOut());
+$("addBtn").addEventListener("click",()=>openModal());
+$("emptyAddBtn").addEventListener("click",()=>openModal());
+$("closeModal").addEventListener("click",closeModal);$("modalBackdrop").addEventListener("click",closeModal);
+document.querySelectorAll(".type-btn").forEach(b=>b.addEventListener("click",()=>{currentType=b.dataset.type;document.querySelectorAll(".type-btn").forEach(x=>x.classList.toggle("active",x===b));updateCategoryOptions(currentType)}));
+$("movementForm").addEventListener("submit",async e=>{
+  e.preventDefault(); if(!session)return;
+  const id=$("movementId").value;
+  const payload={type:currentType,amount:Number($("amount").value),description:$("description").value.trim(),category:$("category").value,date:$("date").value,payment_method:$("paymentMethod").value,user_id:session.user.id};
+  let result=id?await supabase.from("movements").update(payload).eq("id",id):await supabase.from("movements").insert(payload);
+  if(result.error)return toast(result.error.message);
+  closeModal();toast(id?"Movimiento actualizado":"Movimiento guardado");loadMovements();
+});
+$("deleteBtn").addEventListener("click",async()=>{
+  const id=$("movementId").value;if(!id)return;
+  if(!confirm("¿Eliminar este movimiento?"))return;
+  const {error}=await supabase.from("movements").delete().eq("id",id);
+  if(error)return toast(error.message);closeModal();toast("Movimiento eliminado");loadMovements();
+});
+$("movements").addEventListener("click",e=>{const el=e.target.closest(".movement");if(!el)return;const m=movements.find(x=>x.id===el.dataset.id);if(m)openModal(m)});
+["typeFilter","categoryFilter","searchFilter"].forEach(id=>$(id).addEventListener("input",render));
+$("categoryFilter").addEventListener("change",render);
+document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=>toast(b.dataset.view==="home"?"Inicio":"Esta sección estará disponible próximamente")));
+
+init();

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="description" content="Control personal de ingresos y gastos">
+  <title>Finanzas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="authView" class="auth-shell">
+    <div class="auth-card">
+      <div class="brand"><span class="brand-dot"></span><span>Finanzas</span></div>
+      <h1 id="authTitle">Tu dinero, bajo control.</h1>
+      <p id="authSubtitle">Inicia sesión para ver tus ingresos y gastos.</p>
+      <form id="authForm">
+        <label>Email<input id="email" type="email" autocomplete="email" required placeholder="tu@email.com"></label>
+        <label>Contraseña<input id="password" type="password" autocomplete="current-password" minlength="6" required placeholder="••••••••"></label>
+        <button class="primary full" id="authSubmit" type="submit">Iniciar sesión</button>
+      </form>
+      <button class="text-button" id="toggleAuth" type="button">¿No tienes cuenta? Crear una</button>
+      <button class="text-button muted" id="resetPassword" type="button">He olvidado mi contraseña</button>
+      <p id="authMessage" class="message"></p>
+    </div>
+  </div>
+
+  <div id="appView" class="app hidden">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">CONTROL FINANCIERO</div>
+        <h2 id="greeting">Hola 👋</h2>
+      </div>
+      <button id="logoutBtn" class="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión">↪</button>
+    </header>
+
+    <main>
+      <section class="balance-card">
+        <div class="balance-label">Saldo total</div>
+        <div id="balance" class="balance">0,00 €</div>
+        <div class="balance-meta">
+          <span id="monthLabel">Este mes</span>
+          <span id="monthBalance">0,00 €</span>
+        </div>
+      </section>
+
+      <section class="stats-grid">
+        <article class="stat income"><span>Ingresos</span><strong id="incomeTotal">0,00 €</strong></article>
+        <article class="stat expense"><span>Gastos</span><strong id="expenseTotal">0,00 €</strong></article>
+      </section>
+
+      <section class="section-head">
+        <div><h3>Movimientos</h3><p id="movementCount">0 movimientos</p></div>
+        <button id="addBtn" class="primary add-btn">+ Añadir</button>
+      </section>
+
+      <section class="filters">
+        <select id="typeFilter" aria-label="Filtrar tipo">
+          <option value="all">Todos</option>
+          <option value="income">Ingresos</option>
+          <option value="expense">Gastos</option>
+        </select>
+        <select id="categoryFilter" aria-label="Filtrar categoría">
+          <option value="all">Todas las categorías</option>
+        </select>
+        <input id="searchFilter" type="search" placeholder="Buscar..." aria-label="Buscar">
+      </section>
+
+      <section id="movements" class="movements"></section>
+      <div id="emptyState" class="empty hidden">
+        <div class="empty-icon">€</div>
+        <h3>Aún no hay movimientos</h3>
+        <p>Añade tu primer ingreso o gasto para empezar.</p>
+        <button class="primary" id="emptyAddBtn">Añadir movimiento</button>
+      </div>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navegación">
+      <button class="nav-item active" data-view="home">⌂<span>Inicio</span></button>
+      <button class="nav-item" data-view="stats">◔<span>Resumen</span></button>
+      <button class="nav-item" data-view="settings">⚙<span>Ajustes</span></button>
+    </nav>
+  </div>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-sheet">
+      <div class="modal-header"><h3 id="modalTitle">Nuevo movimiento</h3><button id="closeModal" class="icon-button">×</button></div>
+      <form id="movementForm">
+        <input type="hidden" id="movementId">
+        <div class="type-toggle">
+          <button type="button" data-type="expense" class="type-btn active expense-type">Gasto</button>
+          <button type="button" data-type="income" class="type-btn income-type">Ingreso</button>
+        </div>
+        <label>Cantidad (€)<input id="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="0,00"></label>
+        <label>Concepto<input id="description" type="text" maxlength="120" required placeholder="Ej. Supermercado"></label>
+        <label>Categoría<select id="category" required></select></label>
+        <label>Fecha<input id="date" type="date" required></label>
+        <label>Método<select id="paymentMethod">
+          <option>Tarjeta</option><option>Efectivo</option><option>Transferencia</option><option>Bizum</option><option>Otro</option>
+        </select></label>
+        <button class="primary full" type="submit">Guardar movimiento</button>
+        <button id="deleteBtn" class="danger full hidden" type="button">Eliminar movimiento</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
