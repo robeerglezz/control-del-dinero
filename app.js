@@ -217,7 +217,7 @@ function showSettings(){
       <button class="settings-row" id="currencySetting"><span class="row-icon">€</span><span><b>Moneda</b><small>${currencyNames[settings.currency]||settings.currency}</small></span><span>›</span></button>
       <button class="settings-row" id="categoriesSetting"><span class="row-icon">🏷</span><span><b>Categorías</b><small>${settings.categories.expense.length} gastos · ${settings.categories.income.length} ingresos</small></span><span>›</span></button>
     </div>
-    <div class="settings-group"><div class="group-label">DATOS</div><button class="settings-row" id="exportCsv"><span class="row-icon">⇩</span><span><b>Exportar movimientos</b><small>Descargar CSV</small></span><span>›</span></button></div>
+    <div class="settings-group"><div class="group-label">DATOS</div><button class="settings-row" id="exportCsv"><span class="row-icon">⇩</span><span><b>Exportar movimientos</b><small>Descargar CSV</small></span><span>›</span></button><button class="settings-row" id="importCsv"><span class="row-icon">⇧</span><span><b>Importar movimientos</b><small>Cargar movimientos desde un CSV</small></span><span>›</span></button><input id="csvFileInput" type="file" accept=".csv,text/csv" class="hidden"></div>
     <div class="settings-group"><div class="group-label">SEGURIDAD</div><button class="settings-row danger-row" id="deleteAll"><span class="row-icon">⌫</span><span><b>Eliminar todos los movimientos</b><small>Esta acción no se puede deshacer</small></span><span>›</span></button></div>
     <div class="app-version">Finanzas · versión 1.1</div>
     <div class="settings-dialog hidden" id="settingsDialog"><div class="settings-dialog-card"><div class="dialog-head"><h3 id="dialogTitle"></h3><button id="dialogClose" class="icon-button">×</button></div><div id="dialogBody"></div></div></div>
@@ -237,11 +237,63 @@ function showSettings(){
     const edit=e.target.closest(".edit-cat"); if(edit){const arr=settings.categories[edit.dataset.type],old=arr[Number(edit.dataset.index)],name=prompt("Nuevo nombre de la categoría:",old);if(name&&name.trim()&&name.trim()!==old){const n=name.trim();if(arr.some((x,i)=>i!==Number(edit.dataset.index)&&x.toLowerCase()===n.toLowerCase()))return toast("Esa categoría ya existe");arr[Number(edit.dataset.index)]=n;saveSettings();showSettings();setTimeout(()=>$("categoriesSetting").click(),0);}return;}
     const del=e.target.closest(".del-cat"); if(del){const arr=settings.categories[del.dataset.type],idx=Number(del.dataset.index);if(arr.length<=1)return toast("Debes conservar al menos una categoría");if(!confirm(`¿Eliminar la categoría «${arr[idx]}»? Los movimientos antiguos conservarán su categoría.`))return;arr.splice(idx,1);saveSettings();showSettings();setTimeout(()=>$("categoriesSetting").click(),0);return;}
   });
-  $("exportCsv").onclick=()=>{if(!movements.length)return toast("No hay movimientos para exportar");const rows=[["Fecha","Tipo","Cantidad","Concepto","Categoría","Método"],...movements.map(m=>[m.date,m.type,m.amount,m.description,m.category,m.payment_method])];const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="movimientos.csv";a.click();URL.revokeObjectURL(a.href)};
+  $("exportCsv").onclick=()=>{if(!movements.length)return toast("No hay movimientos para exportar");const rows=[["Fecha","Tipo","Cantidad","Concepto","Categoría","Método"],...movements.map(m=>[m.date,m.type,m.amount,m.description,m.category,m.payment_method])];const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="movimientos.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+  $("importCsv").onclick=()=>$("csvFileInput").click();
+  $("csvFileInput").addEventListener("change",async e=>{const file=e.target.files?.[0];if(!file)return;await importCsvFile(file);e.target.value=""});
   $("deleteAll").onclick=async()=>{if(!movements.length)return toast("No hay movimientos");if(!confirm("¿Eliminar TODOS tus movimientos? Esta acción no se puede deshacer."))return;const {error}=await db.from("movements").delete().eq("user_id",session.user.id);if(error)return toast(error.message);toast("Movimientos eliminados");await loadMovements()};
 }
 
+function csvParse(text){
+  const rows=[];let row=[],cell="",quoted=false;
+  text=text.replace(/^\uFEFF/,"");
+  for(let i=0;i<text.length;i++){const ch=text[i],next=text[i+1];
+    if(ch==='"'){if(quoted&&next==='"'){cell+='"';i++;}else quoted=!quoted;}
+    else if(ch===','&&!quoted){row.push(cell);cell="";}
+    else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&next==='\n')i++;row.push(cell);if(row.some(v=>v.trim()!==""))rows.push(row);row=[];cell="";}
+    else cell+=ch;
+  }
+  if(cell!==""||row.length){row.push(cell);if(row.some(v=>v.trim()!==""))rows.push(row)}
+  return rows;
+}
+function normalizeHeader(h){return String(h||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"")}
+async function importCsvFile(file){
+  try{
+    const text=await file.text(),rows=csvParse(text);if(rows.length<2)return toast("El CSV no contiene movimientos");
+    const headers=rows[0].map(normalizeHeader);
+    const find=(names)=>{for(const n of names){const i=headers.indexOf(normalizeHeader(n));if(i>=0)return i}return -1};
+    const ix={date:find(["fecha","date"]),type:find(["tipo","type"]),amount:find(["cantidad","importe","amount","monto"]),description:find(["concepto","descripcion","description"]),category:find(["categoria","category"]),method:find(["metodo","metodo de pago","payment method","payment_method","method"])};
+    if(ix.type<0||ix.amount<0||ix.description<0||ix.category<0||ix.date<0){return toast("Faltan columnas obligatorias: Fecha, Tipo, Cantidad, Concepto y Categoría")}
+    const valid=[],errors=[];
+    rows.slice(1).forEach((r,n)=>{
+      const rawType=String(r[ix.type]||"").trim().toLowerCase();const type=["ingreso","income","entrada","i"].includes(rawType)?"income":["gasto","expense","salida","e"].includes(rawType)?"expense":null;
+      const amount=Number(String(r[ix.amount]||"").trim().replace(/\s/g,"").replace(/€/g,"").replace(/\.(?=\d{3}(?:,|$))/g,"").replace(",","."));
+      const description=String(r[ix.description]||"").trim();const category=String(r[ix.category]||"").trim();const date=String(r[ix.date]||"").trim();const method=ix.method>=0?String(r[ix.method]||"").trim():"Otro";
+      if(!type||!(amount>0)||!description||!category||!/^(\d{4}-\d{2}-\d{2})$/.test(date)){errors.push(n+2);return}
+      valid.push({user_id:session.user.id,type,amount,description:description.slice(0,120),category,date,payment_method:method||"Otro"});
+    });
+    if(!valid.length)return toast(`No se pudieron importar filas${errors.length?` (errores: ${errors.join(", ")})`:""}`);
+    const preview=`Se importarán ${valid.length} movimiento${valid.length===1?"":"s"}${errors.length?` y se omitirán ${errors.length} filas inválidas`:""}. ¿Continuar?`;
+    if(!confirm(preview))return;
+    const {error}=await db.from("movements").insert(valid);if(error)return toast(`Error al importar: ${error.message}`);
+    toast(`${valid.length} movimiento${valid.length===1?"":"s"} importado${valid.length===1?"":"s"}`);await loadMovements();showSettings();
+  }catch(err){console.error(err);toast("No se pudo leer el CSV")}
+}
+function showSummary(){
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view==="stats"));
+  const month=new Date().toISOString().slice(0,7), monthMov=movements.filter(m=>m.date.startsWith(month));
+  const sum=(arr,type)=>arr.filter(m=>!type||m.type===type).reduce((s,m)=>s+Number(m.amount),0);
+  const income=sum(movements,"income"),expense=sum(movements,"expense"),balance=income-expense,mi=sum(monthMov,"income"),me=sum(monthMov,"expense");
+  const byCat={};monthMov.filter(m=>m.type==="expense").forEach(m=>byCat[m.category]=(byCat[m.category]||0)+Number(m.amount));
+  const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const max=cats[0]?.[1]||1;
+  const monthName=new Intl.DateTimeFormat("es-ES",{month:"long",year:"numeric"}).format(new Date());
+  document.querySelector("main").innerHTML=`<section class="summary-page"><div class="settings-title"><div class="eyebrow">ANÁLISIS</div><h2>Resumen</h2><p>${monthName.charAt(0).toUpperCase()+monthName.slice(1)}</p></div>
+    <section class="balance-card"><div class="balance-label">Saldo total</div><div class="balance">${money(balance)}</div><div class="balance-meta"><span>Este mes</span><span>${money(mi-me)}</span></div></section>
+    <section class="stats-grid"><article class="stat income"><span>Ingresos totales</span><strong>${money(income)}</strong></article><article class="stat expense"><span>Gastos totales</span><strong>${money(expense)}</strong></article></section>
+    <section class="summary-card"><div class="summary-card-head"><div><h3>Este mes</h3><p>${monthMov.length} movimientos</p></div></div><div class="summary-bars"><div><span>Ingresos</span><strong>${money(mi)}</strong></div><div class="bar"><i style="width:${Math.min(100,(mi/(Math.max(mi,me,1)))*100)}%"></i></div><div><span>Gastos</span><strong>${money(me)}</strong></div><div class="bar"><i style="width:${Math.min(100,(me/(Math.max(mi,me,1)))*100)}%"></i></div></div></section>
+    <section class="summary-card"><div class="summary-card-head"><div><h3>Gastos por categoría</h3><p>Este mes</p></div></div>${cats.length?cats.slice(0,8).map(([c,v])=>`<div class="category-stat"><div><span>${escapeHtml(c)}</span><strong>${money(v)}</strong></div><div class="bar"><i style="width:${(v/max)*100}%"></i></div></div>`).join(""):"<div class='empty-inline'>No hay gastos este mes.</div>"}</section>
+    <section class="summary-card"><div class="summary-card-head"><div><h3>Últimos movimientos</h3></div></div>${movements.slice(0,5).map(m=>`<div class="summary-movement"><span>${escapeHtml(m.description)}</span><strong class="movement-amount ${m.type}">${m.type==="income"?"+":"−"} ${money(m.amount)}</strong></div>`).join("")||"<div class='empty-inline'>No hay movimientos.</div>"}</section></section>`;
+}
 function showHome(){document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view==="home")); location.reload();}
-document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=>b.dataset.view==="settings"?showSettings():b.dataset.view==="home"?showHome():toast("Resumen próximamente")));
+document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=>b.dataset.view==="settings"?showSettings():b.dataset.view==="home"?showHome():showSummary()));
 
 init();
