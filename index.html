@@ -89,22 +89,20 @@
 
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-backdrop" id="modalBackdrop"></div>
-    <div class="modal-sheet">
-      <div class="modal-header"><h3 id="modalTitle">Nuevo movimiento</h3><button id="closeModal" class="icon-button">×</button></div>
+    <div class="modal-sheet wizard-sheet">
+      <div class="modal-header"><h3 id="modalTitle">Nuevo movimiento</h3><button id="closeModal" class="icon-button" type="button">×</button></div>
+      <div class="wizard-progress"><span id="stepLabel">Paso 1 de 5</span><div class="progress-track"><i id="progressBar"></i></div></div>
       <form id="movementForm">
         <input type="hidden" id="movementId">
-        <div class="type-toggle">
-          <button type="button" data-type="expense" class="type-btn active expense-type">Gasto</button>
-          <button type="button" data-type="income" class="type-btn income-type">Ingreso</button>
+        <div class="wizard-step" data-step="1">
+          <div class="step-kicker">TIPO</div><div class="type-toggle"><button type="button" data-type="expense" class="type-btn active expense-type">Gasto</button><button type="button" data-type="income" class="type-btn income-type">Ingreso</button></div>
+          <div class="step-kicker">PASO 1</div><h4>¿Cuánto?</h4><label class="big-field">Cantidad (€)<input id="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="0,00"></label>
         </div>
-        <label>Cantidad (€)<input id="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="0,00"></label>
-        <label>Concepto<input id="description" type="text" maxlength="120" required placeholder="Ej. Supermercado"></label>
-        <label>Categoría<select id="category" required></select></label>
-        <label>Fecha<input id="date" type="date" required></label>
-        <label>Método<select id="paymentMethod">
-          <option>Tarjeta</option><option>Efectivo</option><option>Transferencia</option><option>Bizum</option><option>Otro</option>
-        </select></label>
-        <button class="primary full" type="submit">Guardar movimiento</button>
+        <div class="wizard-step hidden" data-step="2"><div class="step-kicker">PASO 2</div><h4>¿En qué?</h4><label class="big-field">Concepto<input id="description" type="text" maxlength="120" required placeholder="Ej. Supermercado"></label></div>
+        <div class="wizard-step hidden" data-step="3"><div class="step-kicker">PASO 3</div><h4>¿Qué categoría?</h4><label class="big-field">Categoría<select id="category" required></select></label></div>
+        <div class="wizard-step hidden" data-step="4"><div class="step-kicker">PASO 4</div><h4>¿Qué fecha?</h4><label class="big-field">Fecha<input id="date" type="date" required></label></div>
+        <div class="wizard-step hidden" data-step="5"><div class="step-kicker">PASO 5</div><h4>¿Cómo lo pagaste?</h4><label class="big-field">Método<select id="paymentMethod"><option>Tarjeta</option><option>Efectivo</option><option>Transferencia</option><option>Bizum</option><option>Otro</option></select></label><div class="wizard-summary" id="wizardSummary"></div></div>
+        <div class="wizard-actions"><button id="backStep" class="secondary" type="button">Atrás</button><button id="nextStep" class="primary" type="button">Continuar</button><button id="saveStep" class="primary hidden" type="submit">Guardar movimiento</button></div>
         <button id="deleteBtn" class="danger full hidden" type="button">Eliminar movimiento</button>
       </form>
     </div>

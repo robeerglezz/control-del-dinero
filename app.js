@@ -63,16 +63,26 @@ function render(){
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 
+let wizardStep = 1;
 function openModal(m=null){
-  $("modal").classList.remove("hidden");
-  $("movementId").value=m?.id||"";$("modalTitle").textContent=m?"Editar movimiento":"Nuevo movimiento";
-  currentType=m?.type||"expense";
-  document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===currentType));
+  $("modal").classList.remove("hidden"); $("movementId").value=m?.id||""; $("modalTitle").textContent=m?"Editar movimiento":"Nuevo movimiento";
+  currentType=m?.type||"expense"; document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===currentType));
   updateCategoryOptions(currentType,m?.category||categories[currentType][0]);
-  $("amount").value=m?.amount??"";$("description").value=m?.description??"";$("date").value=m?.date||today();$("paymentMethod").value=m?.payment_method||"Tarjeta";
-  $("deleteBtn").classList.toggle("hidden",!m);
-  setTimeout(()=>$("amount").focus(),100);
+  $("amount").value=m?.amount??""; $("description").value=m?.description??""; $("date").value=m?.date||today(); $("paymentMethod").value=m?.payment_method||"Tarjeta";
+  $("deleteBtn").classList.toggle("hidden",!m); wizardStep=1; renderWizard();
 }
+function renderWizard(){
+  document.querySelectorAll(".wizard-step").forEach(s=>s.classList.toggle("hidden",Number(s.dataset.step)!==wizardStep));
+  $("stepLabel").textContent=`Paso ${wizardStep} de 5`; $("progressBar").style.width=`${wizardStep*20}%`;
+  $("backStep").disabled=wizardStep===1; $("nextStep").classList.toggle("hidden",wizardStep===5); $("saveStep").classList.toggle("hidden",wizardStep!==5);
+  if(wizardStep===5){$("wizardSummary").innerHTML=`<strong>${currentType==='income'?'+':'−'} ${euro($("amount").value)}</strong><span>${escapeHtml($("description").value)} · ${escapeHtml($("category").value)} · ${dateES($("date").value)} · ${escapeHtml($("paymentMethod").value)}</span>`}
+  const focusId=["amount","description","category","date","paymentMethod"][wizardStep-1]; setTimeout(()=>$(focusId)?.focus(),80);
+}
+function validateStep(){
+  const id=["amount","description","category","date","paymentMethod"][wizardStep-1], el=$(id);
+  if(!el.checkValidity()){el.reportValidity();return false} return true;
+}
+
 function closeModal(){$("modal").classList.add("hidden")}
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -96,6 +106,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+$("backStep").addEventListener("click",()=>{if(wizardStep>1){wizardStep--;renderWizard()}});
+$("nextStep").addEventListener("click",()=>{if(validateStep()){wizardStep++;renderWizard()}});
+document.querySelectorAll("#movementForm input, #movementForm select").forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter"&&wizardStep<5){e.preventDefault();if(validateStep()){wizardStep++;renderWizard()}}}));
 
 $("authForm").addEventListener("submit",async e=>{
   e.preventDefault();setAuthMessage("");const email=$("email").value.trim(),password=$("password").value;
