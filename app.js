@@ -75,6 +75,28 @@ function openModal(m=null){
 }
 function closeModal(){$("modal").classList.add("hidden")}
 
+document.addEventListener("DOMContentLoaded", () => {
+  const toggle = $("toggleAuth");
+  if (toggle) {
+    toggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      authMode = authMode === "login" ? "signup" : "login";
+      $("authTitle").textContent = authMode === "login" ? "Tu dinero, bajo control." : "Crea tu cuenta.";
+      $("authSubtitle").textContent = authMode === "login"
+        ? "Inicia sesión para ver tus ingresos y gastos."
+        : "Crea una cuenta para guardar tus movimientos.";
+      $("authSubmit").textContent = authMode === "login" ? "Iniciar sesión" : "Crear cuenta";
+      $("toggleAuth").textContent = authMode === "login"
+        ? "¿No tienes cuenta? Crear una"
+        : "¿Ya tienes cuenta? Iniciar sesión";
+      $("resetPassword").classList.toggle("hidden", authMode !== "login");
+      setAuthMessage("");
+      $("password").value = "";
+      $("email").focus();
+    });
+  }
+});
+
 $("authForm").addEventListener("submit",async e=>{
   e.preventDefault();setAuthMessage("");const email=$("email").value.trim(),password=$("password").value;
   $("authSubmit").disabled=true;
@@ -83,15 +105,13 @@ $("authForm").addEventListener("submit",async e=>{
   else result=await supabase.auth.signUp({email,password});
   $("authSubmit").disabled=false;
   if(result.error)setAuthMessage(result.error.message);
-  else if(authMode==="signup")setAuthMessage("Cuenta creada. Revisa tu email si la confirmación está activada.");
-});
-$("toggleAuth").addEventListener("click",()=>{
-  authMode=authMode==="login"?"signup":"login";
-  $("authTitle").textContent=authMode==="login"?"Tu dinero, bajo control.":"Crea tu cuenta.";
-  $("authSubtitle").textContent=authMode==="login"?"Inicia sesión para ver tus ingresos y gastos.":"Tus movimientos estarán vinculados a tu cuenta.";
-  $("authSubmit").textContent=authMode==="login"?"Iniciar sesión":"Crear cuenta";
-  $("toggleAuth").textContent=authMode==="login"?"¿No tienes cuenta? Crear una":"¿Ya tienes cuenta? Iniciar sesión";
-  setAuthMessage("");
+  else if(authMode==="signup"){
+  if(result.data?.session){
+    setAuthMessage("Cuenta creada correctamente. Entrando…");
+  } else {
+    setAuthMessage("Cuenta creada. Revisa tu email para confirmar la cuenta y después inicia sesión.");
+  }
+}
 });
 $("resetPassword").addEventListener("click",async()=>{
   const email=$("email").value.trim();if(!email)return setAuthMessage("Escribe primero tu email.");
