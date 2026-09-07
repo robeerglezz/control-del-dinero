@@ -183,6 +183,26 @@ $("deleteBtn").addEventListener("click",async()=>{
 $("movements").addEventListener("click",e=>{const el=e.target.closest(".movement");if(!el)return;const m=movements.find(x=>x.id===el.dataset.id);if(m)openModal(m)});
 ["typeFilter","categoryFilter","searchFilter"].forEach(id=>$(id).addEventListener("input",render));
 $("categoryFilter").addEventListener("change",render);
-document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=>toast(b.dataset.view==="home"?"Inicio":"Esta sección estará disponible próximamente")));
+function showSettings(){
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view==="settings"));
+  document.querySelector("main").innerHTML=`<section class="settings-page">
+    <div class="settings-title"><div class="eyebrow">CONFIGURACIÓN</div><h2>Ajustes</h2><p>Personaliza tu cuenta y tus finanzas.</p></div>
+    <div class="settings-group"><div class="group-label">CUENTA</div>
+      <div class="settings-row"><span class="row-icon">✉</span><span><b>Correo electrónico</b><small>${escapeHtml(session?.user?.email||"")}</small></span></div>
+      <button class="settings-row" id="changePassword"><span class="row-icon">🔒</span><span><b>Cambiar contraseña</b><small>Recibir enlace por email</small></span><span>›</span></button>
+      <button class="settings-row" id="settingsLogout"><span class="row-icon">↪</span><span><b>Cerrar sesión</b><small>Salir de tu cuenta</small></span><span>›</span></button>
+    </div>
+    <div class="settings-group"><div class="group-label">APARIENCIA</div><div class="settings-row"><span class="row-icon">☾</span><span><b>Tema</b><small>Oscuro</small></span><span class="pill">Actual</span></div></div>
+    <div class="settings-group"><div class="group-label">FINANZAS</div><div class="settings-row"><span class="row-icon">€</span><span><b>Moneda</b><small>Euro (€)</small></span></div><div class="settings-row"><span class="row-icon">🏷</span><span><b>Categorías</b><small>Se seleccionan al añadir movimientos</small></span></div></div>
+    <div class="settings-group"><div class="group-label">DATOS</div><button class="settings-row" id="exportCsv"><span class="row-icon">⇩</span><span><b>Exportar movimientos</b><small>Descargar CSV</small></span><span>›</span></button></div>
+    <div class="settings-group"><div class="group-label">SEGURIDAD</div><button class="settings-row danger-row" id="deleteAll"><span class="row-icon">⌫</span><span><b>Eliminar todos los movimientos</b><small>Esta acción no se puede deshacer</small></span><span>›</span></button></div>
+    <div class="app-version">Finanzas · versión 1.0</div></section>`;
+  document.getElementById("settingsLogout").onclick=()=>db.auth.signOut();
+  document.getElementById("changePassword").onclick=async()=>{const {error}=await db.auth.resetPasswordForEmail(session.user.email,{redirectTo:location.origin+location.pathname});toast(error?error.message:"Te hemos enviado un enlace para cambiar la contraseña.")};
+  document.getElementById("exportCsv").onclick=()=>{if(!movements.length)return toast("No hay movimientos para exportar");const rows=[["Fecha","Tipo","Cantidad","Concepto","Categoría","Método"],...movements.map(m=>[m.date,m.type,m.amount,m.description,m.category,m.payment_method])];const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="movimientos.csv";a.click();URL.revokeObjectURL(a.href)};
+  document.getElementById("deleteAll").onclick=async()=>{if(!movements.length)return toast("No hay movimientos");if(!confirm("¿Eliminar TODOS tus movimientos? Esta acción no se puede deshacer."))return;const {error}=await db.from("movements").delete().eq("user_id",session.user.id);if(error)return toast(error.message);toast("Movimientos eliminados");await loadMovements()};
+}
+function showHome(){document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view==="home")); location.reload();}
+document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=>b.dataset.view==="settings"?showSettings():b.dataset.view==="home"?showHome():toast("Resumen próximamente")));
 
 init();
