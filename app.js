@@ -1,5 +1,5 @@
 const { createClient } = window.supabase;
-const supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 const $ = id => document.getElementById(id);
 const categories = {
@@ -24,9 +24,9 @@ function updateCategoryFilter(){
 }
 
 async function init(){
-  const {data:{session:s}}=await supabase.auth.getSession();
+  const {data:{session:s}}=await db.auth.getSession();
   session=s; renderAuth();
-  supabase.auth.onAuthStateChange((_e,s2)=>{session=s2;renderAuth();if(s2) loadMovements()});
+  db.auth.onAuthStateChange((_e,s2)=>{session=s2;renderAuth();if(s2) loadMovements()});
 }
 function renderAuth(){
   if(session){$("authView").classList.add("hidden");$("appView").classList.remove("hidden");$("greeting").textContent="Hola 👋";loadMovements();}
@@ -35,7 +35,7 @@ function renderAuth(){
 
 async function loadMovements(){
   if(!session)return;
-  const {data,error}=await supabase.from("movements").select("*").order("date",{ascending:false}).order("created_at",{ascending:false});
+  const {data,error}=await db.from("movements").select("*").order("date",{ascending:false}).order("created_at",{ascending:false});
   if(error){toast("No se pudieron cargar los movimientos");console.error(error);return}
   movements=data||[]; updateCategoryFilter(); render();
 }
@@ -101,8 +101,8 @@ $("authForm").addEventListener("submit",async e=>{
   e.preventDefault();setAuthMessage("");const email=$("email").value.trim(),password=$("password").value;
   $("authSubmit").disabled=true;
   let result;
-  if(authMode==="login") result=await supabase.auth.signInWithPassword({email,password});
-  else result=await supabase.auth.signUp({email,password});
+  if(authMode==="login") result=await db.auth.signInWithPassword({email,password});
+  else result=await db.auth.signUp({email,password});
   $("authSubmit").disabled=false;
   if(result.error)setAuthMessage(result.error.message);
   else if(authMode==="signup"){
@@ -115,10 +115,10 @@ $("authForm").addEventListener("submit",async e=>{
 });
 $("resetPassword").addEventListener("click",async()=>{
   const email=$("email").value.trim();if(!email)return setAuthMessage("Escribe primero tu email.");
-  const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
   setAuthMessage(error?error.message:"Te hemos enviado un enlace para restablecer la contraseña.");
 });
-$("logoutBtn").addEventListener("click",()=>supabase.auth.signOut());
+$("logoutBtn").addEventListener("click",()=>db.auth.signOut());
 $("addBtn").addEventListener("click",()=>openModal());
 $("emptyAddBtn").addEventListener("click",()=>openModal());
 $("closeModal").addEventListener("click",closeModal);$("modalBackdrop").addEventListener("click",closeModal);
@@ -127,14 +127,14 @@ $("movementForm").addEventListener("submit",async e=>{
   e.preventDefault(); if(!session)return;
   const id=$("movementId").value;
   const payload={type:currentType,amount:Number($("amount").value),description:$("description").value.trim(),category:$("category").value,date:$("date").value,payment_method:$("paymentMethod").value,user_id:session.user.id};
-  let result=id?await supabase.from("movements").update(payload).eq("id",id):await supabase.from("movements").insert(payload);
+  let result=id?await db.from("movements").update(payload).eq("id",id):await db.from("movements").insert(payload);
   if(result.error)return toast(result.error.message);
   closeModal();toast(id?"Movimiento actualizado":"Movimiento guardado");loadMovements();
 });
 $("deleteBtn").addEventListener("click",async()=>{
   const id=$("movementId").value;if(!id)return;
   if(!confirm("¿Eliminar este movimiento?"))return;
-  const {error}=await supabase.from("movements").delete().eq("id",id);
+  const {error}=await db.from("movements").delete().eq("id",id);
   if(error)return toast(error.message);closeModal();toast("Movimiento eliminado");loadMovements();
 });
 $("movements").addEventListener("click",e=>{const el=e.target.closest(".movement");if(!el)return;const m=movements.find(x=>x.id===el.dataset.id);if(m)openModal(m)});
