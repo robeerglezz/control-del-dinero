@@ -2,13 +2,27 @@ const { createClient } = window.supabase;
 const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 const $ = id => document.getElementById(id);
-const categories = {
+let session = null, movements = [], currentType = "expense", authMode = "login";
+
+const defaultCategories = {
   expense: ["Alimentación","Transporte","Casa","Ocio","Compras","Suscripciones","Salud","Estudios","Otros"],
   income: ["Sueldo","Freelance","Ventas","Regalo","Inversión","Otros"]
 };
-let session = null, movements = [], currentType = "expense", authMode = "login";
-
-const euro = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(n)||0);
+let settings = { theme:"dark", currency:"EUR", categories: structuredClone(defaultCategories) };
+function settingsKey(){ return `finanzas-settings-${session?.user?.id||"guest"}`; }
+function loadSettings(){
+  try { const saved=JSON.parse(localStorage.getItem(settingsKey())||"null"); if(saved){ settings={...settings,...saved,categories:{...defaultCategories,...(saved.categories||{})}}; } } catch(e){}
+  applyTheme();
+}
+function saveSettings(){ localStorage.setItem(settingsKey(), JSON.stringify(settings)); }
+function applyTheme(){
+  const theme=settings.theme||"dark";
+  document.documentElement.dataset.theme=theme;
+  if(theme==="auto") document.documentElement.classList.toggle("system-light",matchMedia("(prefers-color-scheme: light)").matches);
+  else document.documentElement.classList.remove("system-light");
+}
+const money = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:settings.currency||"EUR"}).format(Number(n)||0);
+const euro = money;
 const dateES = d => new Intl.DateTimeFormat("es-ES",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(d+"T12:00:00"));
 const today = () => new Date().toISOString().slice(0,10);
 
@@ -16,7 +30,7 @@ function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");
 function setAuthMessage(msg=""){ $("authMessage").textContent=msg }
 
 function updateCategoryOptions(type, selected=""){
-  $("category").innerHTML = categories[type].map(c=>`<option ${c===selected?"selected":""}>${c}</option>`).join("");
+  $("category").innerHTML = settings.categories[type].map(c=>`<option ${c===selected?"selected":""}>${c}</option>`).join("");
 }
 function updateCategoryFilter(){
   const all=[...new Set(movements.map(m=>m.category).filter(Boolean))].sort();
@@ -24,9 +38,10 @@ function updateCategoryFilter(){
 }
 
 async function init(){
+  loadSettings();
   const {data:{session:s}}=await db.auth.getSession();
-  session=s; renderAuth();
-  db.auth.onAuthStateChange((_e,s2)=>{session=s2;renderAuth();if(s2) loadMovements()});
+  session=s; if(session) loadSettings(); renderAuth();
+  db.auth.onAuthStateChange((_e,s2)=>{session=s2; if(s2) loadSettings(); renderAuth(); if(s2) loadMovements()});
 }
 function renderAuth(){
   if(session){$("authView").classList.add("hidden");$("appView").classList.remove("hidden");$("greeting").textContent="Hola 👋";loadMovements();}
@@ -94,7 +109,7 @@ function openModal(m=null){
   $("movementId").value=m?.id||"";$("modalTitle").textContent=m?"Editar movimiento":"Nuevo movimiento";
   currentType=m?.type||"expense";
   document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===currentType));
-  updateCategoryOptions(currentType,m?.category||categories[currentType][0]);
+  updateCategoryOptions(currentType,m?.category||settings.categories[currentType][0]);
   $("amount").value=m?.amount??"";$("description").value=m?.description??"";$("date").value=m?.date||today();$("paymentMethod").value=m?.payment_method||"Tarjeta";
   $("deleteBtn").classList.toggle("hidden",!m);
   showWizardStep(1);
@@ -185,6 +200,9 @@ $("movements").addEventListener("click",e=>{const el=e.target.closest(".movement
 $("categoryFilter").addEventListener("change",render);
 function showSettings(){
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view==="settings"));
+  const themeLabel={dark:"Oscuro",light:"Claro",auto:"Automático"}[settings.theme]||"Oscuro";
+  const currencyNames={EUR:"Euro (€)",USD:"Dólar ($)",GBP:"Libra (£)"};
+  const catRows=(type)=>settings.categories[type].map((c,i)=>`<div class="cat-row"><span>${escapeHtml(c)}</span><div><button class="mini-btn edit-cat" data-type="${type}" data-index="${i}">Editar</button><button class="mini-btn danger-mini del-cat" data-type="${type}" data-index="${i}">×</button></div></div>`).join("");
   document.querySelector("main").innerHTML=`<section class="settings-page">
     <div class="settings-title"><div class="eyebrow">CONFIGURACIÓN</div><h2>Ajustes</h2><p>Personaliza tu cuenta y tus finanzas.</p></div>
     <div class="settings-group"><div class="group-label">CUENTA</div>
@@ -192,16 +210,37 @@ function showSettings(){
       <button class="settings-row" id="changePassword"><span class="row-icon">🔒</span><span><b>Cambiar contraseña</b><small>Recibir enlace por email</small></span><span>›</span></button>
       <button class="settings-row" id="settingsLogout"><span class="row-icon">↪</span><span><b>Cerrar sesión</b><small>Salir de tu cuenta</small></span><span>›</span></button>
     </div>
-    <div class="settings-group"><div class="group-label">APARIENCIA</div><div class="settings-row"><span class="row-icon">☾</span><span><b>Tema</b><small>Oscuro</small></span><span class="pill">Actual</span></div></div>
-    <div class="settings-group"><div class="group-label">FINANZAS</div><div class="settings-row"><span class="row-icon">€</span><span><b>Moneda</b><small>Euro (€)</small></span></div><div class="settings-row"><span class="row-icon">🏷</span><span><b>Categorías</b><small>Se seleccionan al añadir movimientos</small></span></div></div>
+    <div class="settings-group"><div class="group-label">APARIENCIA</div>
+      <button class="settings-row" id="themeSetting"><span class="row-icon">☾</span><span><b>Tema</b><small>${themeLabel}</small></span><span>›</span></button>
+    </div>
+    <div class="settings-group"><div class="group-label">FINANZAS</div>
+      <button class="settings-row" id="currencySetting"><span class="row-icon">€</span><span><b>Moneda</b><small>${currencyNames[settings.currency]||settings.currency}</small></span><span>›</span></button>
+      <button class="settings-row" id="categoriesSetting"><span class="row-icon">🏷</span><span><b>Categorías</b><small>${settings.categories.expense.length} gastos · ${settings.categories.income.length} ingresos</small></span><span>›</span></button>
+    </div>
     <div class="settings-group"><div class="group-label">DATOS</div><button class="settings-row" id="exportCsv"><span class="row-icon">⇩</span><span><b>Exportar movimientos</b><small>Descargar CSV</small></span><span>›</span></button></div>
     <div class="settings-group"><div class="group-label">SEGURIDAD</div><button class="settings-row danger-row" id="deleteAll"><span class="row-icon">⌫</span><span><b>Eliminar todos los movimientos</b><small>Esta acción no se puede deshacer</small></span><span>›</span></button></div>
-    <div class="app-version">Finanzas · versión 1.0</div></section>`;
-  document.getElementById("settingsLogout").onclick=()=>db.auth.signOut();
-  document.getElementById("changePassword").onclick=async()=>{const {error}=await db.auth.resetPasswordForEmail(session.user.email,{redirectTo:location.origin+location.pathname});toast(error?error.message:"Te hemos enviado un enlace para cambiar la contraseña.")};
-  document.getElementById("exportCsv").onclick=()=>{if(!movements.length)return toast("No hay movimientos para exportar");const rows=[["Fecha","Tipo","Cantidad","Concepto","Categoría","Método"],...movements.map(m=>[m.date,m.type,m.amount,m.description,m.category,m.payment_method])];const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="movimientos.csv";a.click();URL.revokeObjectURL(a.href)};
-  document.getElementById("deleteAll").onclick=async()=>{if(!movements.length)return toast("No hay movimientos");if(!confirm("¿Eliminar TODOS tus movimientos? Esta acción no se puede deshacer."))return;const {error}=await db.from("movements").delete().eq("user_id",session.user.id);if(error)return toast(error.message);toast("Movimientos eliminados");await loadMovements()};
+    <div class="app-version">Finanzas · versión 1.1</div>
+    <div class="settings-dialog hidden" id="settingsDialog"><div class="settings-dialog-card"><div class="dialog-head"><h3 id="dialogTitle"></h3><button id="dialogClose" class="icon-button">×</button></div><div id="dialogBody"></div></div></div>
+  </section>`;
+  const closeDialog=()=>$("settingsDialog").classList.add("hidden");
+  const openDialog=(title,body)=>{$("dialogTitle").textContent=title;$("dialogBody").innerHTML=body;$("settingsDialog").classList.remove("hidden");};
+  $("dialogClose").onclick=closeDialog; $("settingsDialog").onclick=e=>{if(e.target.id==="settingsDialog")closeDialog()};
+  $("settingsLogout").onclick=()=>db.auth.signOut();
+  $("changePassword").onclick=async()=>{const {error}=await db.auth.resetPasswordForEmail(session.user.email,{redirectTo:location.origin+location.pathname});toast(error?error.message:"Te hemos enviado un enlace para cambiar la contraseña.")};
+  $("themeSetting").onclick=()=>openDialog("Tema",`<div class="choice-list">${[["dark","🌙","Oscuro"],["light","☀️","Claro"],["auto","◐","Automático"]].map(([v,i,l])=>`<button class="choice ${settings.theme===v?"selected":""}" data-theme-choice="${v}"><span>${i}</span><b>${l}</b>${settings.theme===v?"<em>✓</em>":""}</button>`).join("")}</div>`);
+  $("currencySetting").onclick=()=>openDialog("Moneda",`<div class="choice-list">${[["EUR","€","Euro (€)"],["USD","$","Dólar ($)"],["GBP","£","Libra (£)"]].map(([v,i,l])=>`<button class="choice ${settings.currency===v?"selected":""}" data-currency-choice="${v}"><span>${i}</span><b>${l}</b>${settings.currency===v?"<em>✓</em>":""}</button>`).join("")}</div>`);
+  $("categoriesSetting").onclick=()=>openDialog("Categorías",`<div class="cat-section"><h4>Gastos</h4><div class="cat-list">${catRows("expense")}</div><button class="primary full add-cat" data-type="expense">+ Añadir categoría de gasto</button></div><div class="cat-section"><h4>Ingresos</h4><div class="cat-list">${catRows("income")}</div><button class="primary full add-cat" data-type="income">+ Añadir categoría de ingreso</button></div>`);
+  $("dialogBody").addEventListener("click",e=>{
+    const t=e.target.closest("[data-theme-choice]"); if(t){settings.theme=t.dataset.themeChoice;saveSettings();applyTheme();closeDialog();showSettings();render();return;}
+    const c=e.target.closest("[data-currency-choice]"); if(c){settings.currency=c.dataset.currencyChoice;saveSettings();closeDialog();showSettings();render();return;}
+    const add=e.target.closest(".add-cat"); if(add){const name=prompt("Nombre de la categoría:");if(name&&name.trim()){const n=name.trim();if(settings.categories[add.dataset.type].some(x=>x.toLowerCase()===n.toLowerCase()))return toast("Esa categoría ya existe");settings.categories[add.dataset.type].push(n);saveSettings();showSettings();setTimeout(()=>$("categoriesSetting").click(),0);}return;}
+    const edit=e.target.closest(".edit-cat"); if(edit){const arr=settings.categories[edit.dataset.type],old=arr[Number(edit.dataset.index)],name=prompt("Nuevo nombre de la categoría:",old);if(name&&name.trim()&&name.trim()!==old){const n=name.trim();if(arr.some((x,i)=>i!==Number(edit.dataset.index)&&x.toLowerCase()===n.toLowerCase()))return toast("Esa categoría ya existe");arr[Number(edit.dataset.index)]=n;saveSettings();showSettings();setTimeout(()=>$("categoriesSetting").click(),0);}return;}
+    const del=e.target.closest(".del-cat"); if(del){const arr=settings.categories[del.dataset.type],idx=Number(del.dataset.index);if(arr.length<=1)return toast("Debes conservar al menos una categoría");if(!confirm(`¿Eliminar la categoría «${arr[idx]}»? Los movimientos antiguos conservarán su categoría.`))return;arr.splice(idx,1);saveSettings();showSettings();setTimeout(()=>$("categoriesSetting").click(),0);return;}
+  });
+  $("exportCsv").onclick=()=>{if(!movements.length)return toast("No hay movimientos para exportar");const rows=[["Fecha","Tipo","Cantidad","Concepto","Categoría","Método"],...movements.map(m=>[m.date,m.type,m.amount,m.description,m.category,m.payment_method])];const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download="movimientos.csv";a.click();URL.revokeObjectURL(a.href)};
+  $("deleteAll").onclick=async()=>{if(!movements.length)return toast("No hay movimientos");if(!confirm("¿Eliminar TODOS tus movimientos? Esta acción no se puede deshacer."))return;const {error}=await db.from("movements").delete().eq("user_id",session.user.id);if(error)return toast(error.message);toast("Movimientos eliminados");await loadMovements()};
 }
+
 function showHome(){document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view==="home")); location.reload();}
 document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=>b.dataset.view==="settings"?showSettings():b.dataset.view==="home"?showHome():toast("Resumen próximamente")));
 
