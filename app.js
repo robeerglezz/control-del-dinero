@@ -64,33 +64,108 @@ function render(){
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 
 let wizardStep = 1;
-const WIZARD_TOTAL = 5;
+const totalWizardSteps = 5;
+
+function showWizardStep(step){
+  wizardStep = Math.max(1, Math.min(totalWizardSteps, step));
+  for(let i=1;i<=totalWizardSteps;i++) $(`wizardStep${i}`).classList.toggle("hidden",i!==wizardStep);
+  $("stepCounter").textContent=`PASO ${wizardStep} DE ${totalWizardSteps}`;
+  $("wizardProgress").style.width=`${wizardStep/totalWizardSteps*100}%`;
+  $("wizardBack").classList.toggle("hidden",wizardStep===1);
+  $("wizardNext").classList.toggle("hidden",wizardStep===totalWizardSteps);
+  $("wizardSave").classList.toggle("hidden",wizardStep!==totalWizardSteps);
+  if(wizardStep===totalWizardSteps) updateWizardSummary();
+  const input=[null,"amount","description","category","date","paymentMethod"][wizardStep];
+  if(input) setTimeout(()=>$(input)?.focus(),80);
+}
+function updateWizardSummary(){
+  $("wizardSummary").innerHTML=`<div><span>${currentType==="income"?"Ingreso":"Gasto"}</span><strong>${euro($("amount").value)}</strong></div><div><span>Concepto</span><strong>${escapeHtml($("description").value)}</strong></div><div><span>Categoría</span><strong>${escapeHtml($("category").value)}</strong></div><div><span>Fecha</span><strong>${dateES($("date").value)}</strong></div><div><span>Método</span><strong>${escapeHtml($("paymentMethod").value)}</strong></div>`;
+}
+function validateWizardStep(){
+  const ids=[null,"amount","description","category","date","paymentMethod"];
+  if(wizardStep===1 && (!(Number($("amount").value)>0))) {toast("Introduce una cantidad válida");$("amount").focus();return false}
+  if(wizardStep===2 && !$("description").value.trim()) {toast("Introduce un concepto");$("description").focus();return false}
+  if(wizardStep===3 && !$("category").value) {toast("Elige una categoría");return false}
+  if(wizardStep===4 && !$("date").value) {toast("Elige una fecha");return false}
+  return true;
+}
 function openModal(m=null){
   $("modal").classList.remove("hidden");
-  $("movementId").value=m?.id||""; $("modalTitle").textContent=m?"Editar movimiento":"Nuevo movimiento";
+  $("movementId").value=m?.id||"";$("modalTitle").textContent=m?"Editar movimiento":"Nuevo movimiento";
   currentType=m?.type||"expense";
   document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===currentType));
   updateCategoryOptions(currentType,m?.category||categories[currentType][0]);
-  $("amount").value=m?.amount??""; $("description").value=m?.description??""; $("date").value=m?.date||today(); $("paymentMethod").value=m?.payment_method||"Tarjeta";
-  $("deleteBtn").classList.toggle("hidden",!m); wizardStep=1; updateWizard();
-  setTimeout(()=>$("amount").focus(),120);
+  $("amount").value=m?.amount??"";$("description").value=m?.description??"";$("date").value=m?.date||today();$("paymentMethod").value=m?.payment_method||"Tarjeta";
+  $("deleteBtn").classList.toggle("hidden",!m);
+  showWizardStep(1);
 }
 function closeModal(){$("modal").classList.add("hidden")}
-function updateWizard(){
-  document.querySelectorAll(".wizard-step").forEach(x=>x.classList.toggle("active",Number(x.dataset.step)===wizardStep));
-  $("wizardStepLabel").textContent=`Paso ${wizardStep} de ${WIZARD_TOTAL}`;
-  $("wizardProgressBar").style.width=`${wizardStep/WIZARD_TOTAL*100}%`;
-  $("wizardBack").classList.toggle("hidden",wizardStep===1);
-  $("wizardNext").classList.toggle("hidden",wizardStep===WIZARD_TOTAL);
-  $("wizardSave").classList.toggle("hidden",wizardStep!==WIZARD_TOTAL);
-  if(wizardStep===WIZARD_TOTAL) $("wizardSummary").innerHTML=`<strong>${currentType==="income"?"Ingreso":"Gasto"}</strong><br>${escapeHtml($("description").value)} · ${escapeHtml($("category").value)}<br>${euro($("amount").value)} · ${dateES($("date").value)} · ${escapeHtml($("paymentMethod").value)}`;
+
+document.addEventListener("DOMContentLoaded", () => {
+  const toggle = $("toggleAuth");
+  if (toggle) {
+    toggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      authMode = authMode === "login" ? "signup" : "login";
+      $("authTitle").textContent = authMode === "login" ? "Tu dinero, bajo control." : "Crea tu cuenta.";
+      $("authSubtitle").textContent = authMode === "login"
+        ? "Inicia sesión para ver tus ingresos y gastos."
+        : "Crea una cuenta para guardar tus movimientos.";
+      $("authSubmit").textContent = authMode === "login" ? "Iniciar sesión" : "Crear cuenta";
+      $("toggleAuth").textContent = authMode === "login"
+        ? "¿No tienes cuenta? Crear una"
+        : "¿Ya tienes cuenta? Iniciar sesión";
+      $("resetPassword").classList.toggle("hidden", authMode !== "login");
+      setAuthMessage("");
+      $("password").value = "";
+      $("email").focus();
+    });
+  }
+});
+
+$("authForm").addEventListener("submit",async e=>{
+  e.preventDefault();setAuthMessage("");const email=$("email").value.trim(),password=$("password").value;
+  $("authSubmit").disabled=true;
+  let result;
+  if(authMode==="login") result=await db.auth.signInWithPassword({email,password});
+  else result=await db.auth.signUp({email,password});
+  $("authSubmit").disabled=false;
+  if(result.error)setAuthMessage(result.error.message);
+  else if(authMode==="signup"){
+  if(result.data?.session){
+    setAuthMessage("Cuenta creada correctamente. Entrando…");
+  } else {
+    setAuthMessage("Cuenta creada. Revisa tu email para confirmar la cuenta y después inicia sesión.");
+  }
 }
-function validateWizardStep(){
-  const ids={1:"amount",2:"description",3:"category",4:"date",5:"paymentMethod"}; const el=$(ids[wizardStep]);
-  if(!el.checkValidity()){el.reportValidity();return false} return true;
+});
+async function oauth(provider){
+  setAuthMessage("");
+  const {error}=await db.auth.signInWithOAuth({
+    provider,
+    options:{redirectTo:window.location.origin+window.location.pathname}
+  });
+  if(error)setAuthMessage(error.message);
 }
-$("wizardNext").addEventListener("click",()=>{if(validateWizardStep()&&wizardStep<WIZARD_TOTAL){wizardStep++;updateWizard();document.querySelector(`.wizard-step[data-step="${wizardStep}"] input,.wizard-step[data-step="${wizardStep}"] select`)?.focus()}});
-$("wizardBack").addEventListener("click",()=>{if(wizardStep>1){wizardStep--;updateWizard()}});
+$("googleBtn").addEventListener("click",()=>oauth("google"));
+
+$("resetPassword").addEventListener("click",async()=>{
+  const email=$("email").value.trim();if(!email)return setAuthMessage("Escribe primero tu email.");
+  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  setAuthMessage(error?error.message:"Te hemos enviado un enlace para restablecer la contraseña.");
+});
+$("logoutBtn").addEventListener("click",()=>db.auth.signOut());
+$("addBtn").addEventListener("click",()=>openModal());
+$("emptyAddBtn").addEventListener("click",()=>openModal());
+$("closeModal").addEventListener("click",closeModal);$("modalBackdrop").addEventListener("click",closeModal);
+document.querySelectorAll(".type-btn").forEach(b=>b.addEventListener("click",()=>{currentType=b.dataset.type;document.querySelectorAll(".type-btn").forEach(x=>x.classList.toggle("active",x===b));updateCategoryOptions(currentType)}));
+$("wizardNext").addEventListener("click",()=>{
+  if(validateWizardStep()) showWizardStep(wizardStep+1);
+});
+$("wizardBack").addEventListener("click",()=>showWizardStep(wizardStep-1));
+document.querySelectorAll("#movementForm input").forEach(el=>el.addEventListener("keydown",e=>{
+  if(e.key==="Enter" && wizardStep<totalWizardSteps){e.preventDefault();$("wizardNext").click();}
+}));
 $("movementForm").addEventListener("submit",async e=>{
   e.preventDefault(); if(!session)return;
   const id=$("movementId").value;
